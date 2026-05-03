@@ -1,0 +1,565 @@
+:root {
+  color-scheme: dark;
+  --ink: #fff;
+  --muted: rgba(255, 255, 255, 0.68);
+  --line: rgba(255, 255, 255, 0.18);
+  --panel: rgba(18, 18, 15, 0.78);
+  --surface: #12120f;
+  --accent: #e84d5b;
+  --gold: #d3aa58;
+  --teal: #5fc4b1;
+  --blue: #7198d8;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(circle at 8% 18%, rgba(95, 196, 177, 0.18), transparent 28%),
+    radial-gradient(circle at 94% 72%, rgba(211, 170, 88, 0.16), transparent 24%),
+    #10100d;
+  color: var(--ink);
+  overflow: hidden;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  z-index: 24;
+  inset: 0 0 auto;
+  height: 126px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.84), rgba(0, 0, 0, 0));
+}
+
+.feed-deck {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+}
+
+.feed-deck::-webkit-scrollbar {
+  display: none;
+}
+
+.feed-panel {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100dvh;
+  scroll-snap-align: start;
+  overflow: hidden;
+}
+
+.feed {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  background: #0f0f0c;
+  overscroll-behavior-y: contain;
+}
+
+.feed::-webkit-scrollbar {
+  display: none;
+}
+
+.artwork-card {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(95, 196, 177, 0.16), transparent 34%),
+    linear-gradient(20deg, rgba(211, 170, 88, 0.14), transparent 42%),
+    #11110e;
+}
+
+.arena-feed .artwork-card {
+  background:
+    linear-gradient(160deg, rgba(113, 152, 216, 0.16), transparent 34%),
+    linear-gradient(20deg, rgba(232, 77, 91, 0.13), transparent 42%),
+    #101012;
+}
+
+.image-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 74px 0 138px;
+}
+
+.art-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 20px 54px rgba(0, 0, 0, 0.58));
+}
+
+.card-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.58), transparent 25%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.74), transparent 48%),
+    linear-gradient(90deg, transparent 66%, rgba(0, 0, 0, 0.38));
+}
+
+.topbar {
+  position: fixed;
+  z-index: 30;
+  top: max(24px, calc(env(safe-area-inset-top) + 14px));
+  left: 50%;
+  width: min(100% - 24px, 500px);
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 30px 30px 30px 1fr 30px;
+  gap: 5px;
+  align-items: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.brand {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  line-height: 1;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.85);
+}
+
+#musicButton.is-playing {
+  color: #11100d;
+  background:
+    linear-gradient(120deg, #1f43c3 0%, #536e9f 30%, #efbd43 60%, #f36d32 100%);
+  background-size: 230% 230%;
+  animation: avGradientDrift 3.8s ease-in-out infinite alternate;
+}
+
+#radioRandomButton {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.era-switch {
+  width: 112px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 2px;
+  background: rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(16px);
+}
+
+.era-option {
+  min-width: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.era-option.is-active {
+  color: #080806;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.brand small {
+  max-width: 180px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-button,
+.rail-button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--ink);
+  background: rgba(14, 14, 11, 0.52);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  pointer-events: auto;
+  text-decoration: none;
+}
+
+.icon-button span,
+.rail-button span {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.icon-button:hover,
+.rail-button:hover,
+.icon-button:focus-visible,
+.rail-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.42);
+  outline: none;
+}
+
+.board-button {
+  position: relative;
+  grid-column: 5;
+  justify-self: end;
+}
+
+.board-button strong {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  min-width: 18px;
+  height: 18px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  color: #fff;
+  background: #000;
+  font-size: 10px;
+}
+
+.art-meta {
+  position: absolute;
+  z-index: 10;
+  left: 18px;
+  right: 86px;
+  bottom: max(30px, calc(env(safe-area-inset-bottom) + 4px));
+  display: grid;
+  gap: 5px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.86);
+}
+
+.source-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-pill,
+.license-pill {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: rgba(255, 255, 255, 0.84);
+  background: rgba(16, 16, 13, 0.56);
+  font-size: 11px;
+  line-height: 1;
+  backdrop-filter: blur(12px);
+}
+
+.license-pill {
+  color: #050504;
+  border-color: #fff;
+  background: #fff;
+}
+
+.art-meta h2 {
+  margin: 0;
+  max-width: 100%;
+  font-size: clamp(16px, 4.4vw, 20px);
+  line-height: 1.12;
+  letter-spacing: 0;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.artist,
+.details {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.18;
+}
+
+.artist {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 670;
+  margin-top: -2px;
+}
+
+.action-rail {
+  position: absolute;
+  z-index: 12;
+  right: 17px;
+  bottom: max(28px, calc(env(safe-area-inset-bottom) + 2px));
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  justify-items: center;
+}
+
+.rail-button {
+  width: 62px;
+  height: 62px;
+  background: rgba(0, 0, 0, 0.86);
+}
+
+.rail-button span {
+  font-size: 33px;
+}
+
+.av-icon {
+  width: 36px;
+  height: 22px;
+  display: block;
+  background: #fff;
+  mask: url("./assets/icons/awfilled.svg") center / contain no-repeat;
+  -webkit-mask: url("./assets/icons/awfilled.svg") center / contain no-repeat;
+  filter: none;
+}
+
+.like-button.is-liked {
+  color: white;
+  background: rgba(0, 0, 0, 0.86);
+}
+
+.like-button.is-liked .av-icon {
+  background:
+    linear-gradient(120deg, #1f43c3 0%, #536e9f 30%, #efbd43 60%, #f36d32 100%);
+  background-size: 230% 230%;
+  animation: avGradientDrift 3.8s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 10px rgba(243, 109, 50, 0.24));
+}
+
+@keyframes avGradientDrift {
+  from {
+    background-position: 0% 68%;
+  }
+
+  to {
+    background-position: 100% 34%;
+  }
+}
+
+.board-panel {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: none;
+}
+
+.board-panel.is-open {
+  display: block;
+}
+
+.board-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.56);
+}
+
+.board-sheet {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  max-height: min(82dvh, 760px);
+  border-top: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 16px max(18px, env(safe-area-inset-bottom));
+  background: rgba(18, 18, 15, 0.96);
+  box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.48);
+  overflow: auto;
+}
+
+.board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.board-header p,
+.board-header h1 {
+  margin: 0;
+}
+
+.board-header p {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 720;
+  text-transform: uppercase;
+}
+
+.board-header h1 {
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.board-card {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.045);
+  text-decoration: none;
+}
+
+.board-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  object-fit: cover;
+  background: #191812;
+}
+
+.board-card div {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+}
+
+.board-card strong {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board-card span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-board {
+  display: none;
+  margin: 34px auto;
+  max-width: 250px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.45;
+}
+
+.empty-board.is-visible {
+  display: block;
+}
+
+.loader-card {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  scroll-snap-align: start;
+  color: var(--muted);
+  background: #11110e;
+}
+
+.loader-card span {
+  width: 38px;
+  height: 38px;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--teal);
+  border-radius: 999px;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 620px) {
+  body {
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+
+  .app-shell {
+    width: min(420px, 100%);
+    height: min(860px, 100dvh - 48px);
+    border: 0;
+    border-radius: 28px;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+  }
+
+  .feed,
+  .feed-deck,
+  .feed-panel,
+  .artwork-card,
+  .loader-card {
+    height: 100%;
+    min-height: 100%;
+  }
+
+  .topbar {
+    top: 62px;
+    width: min(396px, 100% - 48px);
+  }
+
+  .board-panel {
+    inset: 24px;
+  }
+
+  .board-sheet {
+    left: 50%;
+    width: min(420px, 100%);
+    transform: translateX(-50%);
+    border-radius: 18px 18px 28px 28px;
+  }
+}
