@@ -1,0 +1,30 @@
+name: Apply ArtScroll fixes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - art-scroll-fixes.patch
+      - .github/workflows/apply-artscroll-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch and publish
+        run: |
+          git apply art-scroll-fixes.patch
+          rm art-scroll-fixes.patch .github/workflows/apply-artscroll-fixes.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply mobile board fixes"
+          git push
