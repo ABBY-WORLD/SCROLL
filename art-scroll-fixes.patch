@@ -1,0 +1,618 @@
+diff --git a/index.html b/index.html
+index 068c211..6c4511c 100644
+--- a/index.html
++++ b/index.html
+@@ -49,9 +49,15 @@
+               <p>Your board</p>
+               <h1 id="boardTitle">Saved works</h1>
+             </div>
+-            <button class="icon-button" type="button" title="Close" aria-label="Close board" data-close-board>
+-              <span aria-hidden="true">×</span>
+-            </button>
++            <div class="board-actions">
++              <button class="download-board-button" id="downloadBoardButton" type="button" title="Download board" aria-label="Download board">
++                <span aria-hidden="true">↓</span>
++                <span>Download</span>
++              </button>
++              <button class="icon-button" type="button" title="Close" aria-label="Close board" data-close-board>
++                <span aria-hidden="true">×</span>
++              </button>
++            </div>
+           </header>
+           <div class="board-grid" id="boardGrid"></div>
+           <p class="empty-board" id="emptyBoard">Tap the icon to save works here.</p>
+diff --git a/src/app.js b/src/app.js
+index a78a2ad..c704935 100644
+--- a/src/app.js
++++ b/src/app.js
+@@ -1,4 +1,5 @@
+ const feedDeck = document.querySelector("#feedDeck");
++const appShell = document.querySelector(".app-shell");
+ const classicFeed = document.querySelector("#classicFeed");
+ const arenaFeed = document.querySelector("#arenaFeed");
+ const template = document.querySelector("#artworkTemplate");
+@@ -10,6 +11,7 @@ const sourceStatus = document.querySelector("#sourceStatus");
+ const eraOptions = document.querySelectorAll(".era-option");
+ const refreshButton = document.querySelector("#refreshButton");
+ const openBoardButton = document.querySelector("#openBoardButton");
++const downloadBoardButton = document.querySelector("#downloadBoardButton");
+ const musicButton = document.querySelector("#musicButton");
+ const radioRandomButton = document.querySelector("#radioRandomButton");
+ const ambientAudio = document.querySelector("#ambientAudio");
+@@ -95,6 +97,7 @@ let activeStationIndex = randomInt(0, RADIO_STATIONS.length - 1);
+ let activeStreamIndex = 0;
+ let activeFeedName = "classic";
+ let pointerStart = null;
++let uiHideTimer = null;
+ 
+ const sourceState = {
+   artic: { page: randomInt(1, 80), label: "Art Institute of Chicago" },
+@@ -187,6 +190,7 @@ function init() {
+   renderLoader(feedState.arena.element);
+   loadMoreClassicArt();
+   prepareArenaFeed();
++  resetUiAutoHideTimer();
+ }
+ 
+ function bindEvents() {
+@@ -203,6 +207,7 @@ function bindEvents() {
+   });
+ 
+   openBoardButton.addEventListener("click", openBoard);
++  downloadBoardButton?.addEventListener("click", downloadBoard);
+   musicButton.addEventListener("click", toggleMusic);
+   radioRandomButton.addEventListener("click", switchRadioStation);
+   ambientAudio.addEventListener("error", useNextMusicStream);
+@@ -212,6 +217,8 @@ function bindEvents() {
+   });
+ 
+   feedDeck.addEventListener("scroll", updateActiveFeedFromScroll);
++  classicFeed.addEventListener("scroll", hideInterfaceForScroll, { passive: true });
++  arenaFeed.addEventListener("scroll", hideInterfaceForScroll, { passive: true });
+   feedDeck.addEventListener("pointerdown", handlePointerStart);
+   feedDeck.addEventListener("pointerup", handlePointerEnd);
+   feedDeck.addEventListener("pointercancel", () => {
+@@ -292,9 +299,13 @@ function handlePointerEnd(event) {
+   pointerStart = null;
+ 
+   if (Math.abs(deltaX) < 54 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) {
++    if (Math.hypot(deltaX, deltaY) < 16) {
++      toggleInterface();
++    }
+     return;
+   }
+ 
++  hideInterfaceForScroll();
+   setActiveFeed(deltaX < 0 ? "arena" : "classic");
+ }
+ 
+@@ -409,21 +420,22 @@ async function loadMoreClassicArt() {
+ 
+ async function prepareArenaFeed(forceRefresh = false) {
+   const state = feedState.arena;
+-  setStatus(activeFeedName === "arena" ? "Loading Are.na..." : undefined);
++  setStatus(activeFeedName === "arena" ? "Loading" : undefined);
+ 
+   const cached = readArenaCache();
+-  if (!forceRefresh && cached?.items?.length) {
+-    state.allItems = randomizeArenaItems(cached.items);
++  const cachedItems = getUsableArenaItems(cached?.items || []);
++  if (!forceRefresh && cachedItems.length) {
++    state.allItems = randomizeArenaItems(cachedItems);
+     renderNextArenaBatch();
+     setStatus(`${state.items.length} Are.na images`);
+-    if (cached.items.length >= ARENA_MIN_CACHE_ITEMS) {
++    if (cachedItems.length >= ARENA_MIN_CACHE_ITEMS) {
+       return;
+     }
+   }
+ 
+   if (!state.items.length) {
+-    state.allItems = arenaFallbackItems;
+-    renderNextArenaBatch();
++    renderLoader(state.element);
++    setStatus("Loading");
+   }
+ 
+   try {
+@@ -450,23 +462,30 @@ async function prepareArenaFeed(forceRefresh = false) {
+     const normalized = weaveChannels(topChannels.flatMap((channel) => channel.items));
+     const nextItems = normalized.length
+       ? randomizeArenaItems(normalized)
+-      : randomizeArenaItems(cached?.items || arenaFallbackItems);
+-    writeArenaCache(nextItems, topChannels);
++      : randomizeArenaItems(cachedItems);
++    if (nextItems.length) {
++      writeArenaCache(nextItems, topChannels);
++    }
+ 
+-    if (nextItems.length > arenaFallbackItems.length) {
++    if (nextItems.length) {
+       resetFeed("arena");
+       state.allItems = nextItems;
+       renderNextArenaBatch();
++      setStatus(`${state.items.length} Are.na images`);
++    } else if (!state.items.length) {
++      setStatus("Loading");
+     }
+-
+-    setStatus(`${state.items.length} Are.na images`);
+   } catch (error) {
+     console.warn("Are.na ingest failed", error);
+     if (!state.items.length) {
+-      state.allItems = randomizeArenaItems(cached?.items?.length ? cached.items : arenaFallbackItems);
+-      renderNextArenaBatch();
++      state.allItems = randomizeArenaItems(cachedItems);
++      if (state.allItems.length) {
++        renderNextArenaBatch();
++        setStatus(`${state.items.length} Are.na images`);
++      } else {
++        setStatus("Loading");
++      }
+     }
+-    setStatus("Are.na fallback");
+   }
+ }
+ 
+@@ -572,26 +591,38 @@ function normalizeArenaBlock(block, channel) {
+ 
+ function renderNextArenaBatch() {
+   const state = feedState.arena;
+-  if (!state.allItems.length) return;
++  if (!state.allItems.length) return false;
++
++  if (state.cursor >= state.allItems.length) {
++    if (state.allItems.length <= ARENA_PAGE_SIZE || state.allItems.some((item) => isArenaFallbackItem(item))) {
++      return false;
++    }
++
++    state.allItems = randomizeArenaItems(state.allItems);
++    state.cursor = 0;
++  }
+ 
+   const next = state.allItems.slice(state.cursor, state.cursor + ARENA_PAGE_SIZE);
+   state.cursor += next.length;
+ 
+   if (next.length === 0) {
+-    state.cursor = 0;
+-    renderNextArenaBatch();
+-    return;
++    return false;
+   }
+ 
+   renderArtworks("arena", next);
++  return true;
+ }
+ 
+ async function loadMoreArenaArt() {
+   const state = feedState.arena;
+   if (state.isLoading) return;
+   state.isLoading = true;
+-  renderNextArenaBatch();
+-  setStatus(`${state.items.length} Are.na images`);
++  const didRender = renderNextArenaBatch();
++  if (!didRender && !state.items.length) {
++    setStatus("Loading");
++  } else if (didRender) {
++    setStatus(`${state.items.length} Are.na images`);
++  }
+   state.isLoading = false;
+ }
+ 
+@@ -771,6 +802,9 @@ function renderBoard() {
+   const likedItems = Object.values(likes).sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+   boardGrid.innerHTML = "";
+   emptyBoard.classList.toggle("is-visible", likedItems.length === 0);
++  if (downloadBoardButton) {
++    downloadBoardButton.disabled = likedItems.length === 0;
++  }
+ 
+   const fragment = document.createDocumentFragment();
+   likedItems.forEach((item) => {
+@@ -792,14 +826,104 @@ function renderBoard() {
+   boardGrid.append(fragment);
+ }
+ 
++async function downloadBoard() {
++  const likedItems = Object.values(likes).sort((a, b) => b.savedAt.localeCompare(a.savedAt));
++  if (!downloadBoardButton || !likedItems.length || downloadBoardButton.disabled) return;
++
++  downloadBoardButton.disabled = true;
++  downloadBoardButton.classList.add("is-working");
++
++  const manifest = likedItems.map((item, index) => ({
++    index: index + 1,
++    title: item.title || "Untitled",
++    artist: item.artist || item.attribution || "Unknown artist",
++    source: item.source || "",
++    sourceUrl: item.sourceUrl || "",
++    imageUrl: item.imageUrl || "",
++    savedAt: item.savedAt || "",
++  }));
++  const entries = [
++    textZipEntry("manifest.json", JSON.stringify(manifest, null, 2)),
++    textZipEntry(
++      "sources.txt",
++      manifest
++        .map((item) => `${item.index}. ${item.title}\nSource: ${item.sourceUrl}\nImage: ${item.imageUrl}`)
++        .join("\n\n"),
++    ),
++  ];
++
++  for (const item of manifest) {
++    if (!item.imageUrl) continue;
++
++    try {
++      const response = await fetch(item.imageUrl, { mode: "cors" });
++      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
++
++      const contentType = response.headers.get("content-type") || "";
++      const data = new Uint8Array(await response.arrayBuffer());
++      const extension = getImageExtension(item.imageUrl, contentType);
++      entries.push({
++        name: `images/${String(item.index).padStart(2, "0")}-${slugify(item.title)}.${extension}`,
++        data,
++      });
++    } catch (error) {
++      entries.push(
++        textZipEntry(
++          `failed/${String(item.index).padStart(2, "0")}-${slugify(item.title)}.txt`,
++          `This image could not be downloaded directly by the browser.\n\nTitle: ${item.title}\nSource: ${item.sourceUrl}\nImage: ${item.imageUrl}\n\n${error.message}`,
++        ),
++      );
++    }
++  }
++
++  const zip = createZip(entries);
++  triggerDownload(zip, `artscroll-board-${new Date().toISOString().slice(0, 10)}.zip`, "application/zip");
++  downloadBoardButton.classList.remove("is-working");
++  downloadBoardButton.disabled = likedItems.length === 0;
++}
++
+ function openBoard() {
+   boardPanel.classList.add("is-open");
+   boardPanel.setAttribute("aria-hidden", "false");
++  clearUiAutoHideTimer();
+ }
+ 
+ function closeBoard() {
+   boardPanel.classList.remove("is-open");
+   boardPanel.setAttribute("aria-hidden", "true");
++  resetUiAutoHideTimer();
++}
++
++function toggleInterface() {
++  if (boardPanel.classList.contains("is-open")) return;
++
++  appShell.classList.toggle("is-ui-hidden");
++  resetUiAutoHideTimer();
++}
++
++function hideInterfaceForScroll() {
++  if (boardPanel.classList.contains("is-open")) return;
++
++  appShell.classList.add("is-ui-hidden");
++  clearUiAutoHideTimer();
++}
++
++function resetUiAutoHideTimer() {
++  clearUiAutoHideTimer();
++  if (boardPanel.classList.contains("is-open") || appShell.classList.contains("is-ui-hidden")) return;
++
++  uiHideTimer = window.setTimeout(() => {
++    if (!boardPanel.classList.contains("is-open")) {
++      appShell.classList.add("is-ui-hidden");
++    }
++  }, 10000);
++}
++
++function clearUiAutoHideTimer() {
++  if (uiHideTimer) {
++    window.clearTimeout(uiHideTimer);
++    uiHideTimer = null;
++  }
+ }
+ 
+ function observeEnd(feedName) {
+@@ -869,6 +993,8 @@ function updateEraSwitch() {
+ }
+ 
+ function renderLoader(feedElement) {
++  if (feedElement.querySelector("[data-loader]")) return;
++
+   const loader = document.createElement("div");
+   loader.className = "loader-card";
+   loader.dataset.loader = "true";
+@@ -914,6 +1040,14 @@ function readArenaCache() {
+   }
+ }
+ 
++function getUsableArenaItems(items) {
++  return dedupe(items).filter((item) => !isArenaFallbackItem(item));
++}
++
++function isArenaFallbackItem(item) {
++  return item?.id?.startsWith("arena-fallback");
++}
++
+ function writeArenaCache(items, channels) {
+   localStorage.setItem(
+     ARENA_CACHE_KEY,
+@@ -1026,6 +1160,138 @@ function randomOtherIndex(currentIndex, length) {
+   return nextIndex;
+ }
+ 
++function createZip(entries) {
++  const fileParts = [];
++  const centralParts = [];
++  let offset = 0;
++
++  entries.forEach((entry) => {
++    const nameBytes = encodeText(entry.name);
++    const data = entry.data instanceof Uint8Array ? entry.data : encodeText(String(entry.data || ""));
++    const crc = crc32(data);
++    const localHeader = concatBytes(
++      uint32(0x04034b50),
++      uint16(20),
++      uint16(0),
++      uint16(0),
++      uint16(0),
++      uint16(0),
++      uint32(crc),
++      uint32(data.length),
++      uint32(data.length),
++      uint16(nameBytes.length),
++      uint16(0),
++      nameBytes,
++    );
++    const centralHeader = concatBytes(
++      uint32(0x02014b50),
++      uint16(20),
++      uint16(20),
++      uint16(0),
++      uint16(0),
++      uint16(0),
++      uint16(0),
++      uint32(crc),
++      uint32(data.length),
++      uint32(data.length),
++      uint16(nameBytes.length),
++      uint16(0),
++      uint16(0),
++      uint16(0),
++      uint16(0),
++      uint32(0),
++      uint32(offset),
++      nameBytes,
++    );
++
++    fileParts.push(localHeader, data);
++    centralParts.push(centralHeader);
++    offset += localHeader.length + data.length;
++  });
++
++  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
++  const endRecord = concatBytes(
++    uint32(0x06054b50),
++    uint16(0),
++    uint16(0),
++    uint16(entries.length),
++    uint16(entries.length),
++    uint32(centralSize),
++    uint32(offset),
++    uint16(0),
++  );
++
++  return new Blob([...fileParts, ...centralParts, endRecord], { type: "application/zip" });
++}
++
++function textZipEntry(name, text) {
++  return { name, data: encodeText(text) };
++}
++
++function triggerDownload(blob, filename, type) {
++  const payload = blob instanceof Blob ? blob : new Blob([blob], { type });
++  const url = URL.createObjectURL(payload);
++  const link = document.createElement("a");
++  link.href = url;
++  link.download = filename;
++  document.body.append(link);
++  link.click();
++  link.remove();
++  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
++}
++
++function getImageExtension(url, contentType) {
++  if (contentType.includes("png")) return "png";
++  if (contentType.includes("webp")) return "webp";
++  if (contentType.includes("gif")) return "gif";
++  if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
++
++  const match = new URL(url, window.location.href).pathname.match(/\.([a-z0-9]+)$/i);
++  return match?.[1]?.slice(0, 5).toLowerCase() || "jpg";
++}
++
++function uint16(value) {
++  const bytes = new Uint8Array(2);
++  bytes[0] = value & 0xff;
++  bytes[1] = (value >>> 8) & 0xff;
++  return bytes;
++}
++
++function uint32(value) {
++  const bytes = new Uint8Array(4);
++  bytes[0] = value & 0xff;
++  bytes[1] = (value >>> 8) & 0xff;
++  bytes[2] = (value >>> 16) & 0xff;
++  bytes[3] = (value >>> 24) & 0xff;
++  return bytes;
++}
++
++function concatBytes(...chunks) {
++  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
++  const result = new Uint8Array(total);
++  let offset = 0;
++  chunks.forEach((chunk) => {
++    result.set(chunk, offset);
++    offset += chunk.length;
++  });
++  return result;
++}
++
++function encodeText(text) {
++  return new TextEncoder().encode(text);
++}
++
++function crc32(data) {
++  let crc = -1;
++  for (let index = 0; index < data.length; index += 1) {
++    crc ^= data[index];
++    for (let bit = 0; bit < 8; bit += 1) {
++      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
++    }
++  }
++  return (crc ^ -1) >>> 0;
++}
++
+ function delay(ms) {
+   return new Promise((resolve) => {
+     window.setTimeout(resolve, ms);
+@@ -1041,6 +1307,14 @@ function cleanTitle(value) {
+   return title.replace(/\.(jpe?g|png|gif|webp)$/i, "");
+ }
+ 
++function slugify(value) {
++  return cleanLine(value || "work")
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, "-")
++    .replace(/^-+|-+$/g, "")
++    .slice(0, 48) || "work";
++}
++
+ function escapeHtml(value) {
+   return String(value || "")
+     .replaceAll("&", "&amp;")
+diff --git a/styles.css b/styles.css
+index bd32908..296526e 100644
+--- a/styles.css
++++ b/styles.css
+@@ -143,11 +143,14 @@ a {
+   width: min(100% - 24px, 500px);
+   min-height: 34px;
+   display: grid;
+-  grid-template-columns: 30px 30px 30px 1fr 30px;
+-  gap: 5px;
++  grid-template-columns: 40px 40px 40px 1fr 40px;
++  gap: 3px;
+   align-items: center;
+   transform: translateX(-50%);
+   pointer-events: none;
++  transition:
++    opacity 180ms ease,
++    transform 180ms ease;
+ }
+ 
+ .brand {
+@@ -214,8 +217,8 @@ a {
+ 
+ .icon-button,
+ .rail-button {
+-  width: 30px;
+-  height: 30px;
++  width: 38px;
++  height: 38px;
+   border: 0;
+   border-radius: 999px;
+   display: inline-grid;
+@@ -231,7 +234,7 @@ a {
+ 
+ .icon-button span,
+ .rail-button span {
+-  font-size: 16px;
++  font-size: 17px;
+   line-height: 1;
+ }
+ 
+@@ -274,6 +277,7 @@ a {
+   display: grid;
+   gap: 5px;
+   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.86);
++  transition: opacity 180ms ease;
+ }
+ 
+ .source-row {
+@@ -336,6 +340,19 @@ a {
+   margin: 0;
+   padding: 0;
+   justify-items: center;
++  transition: opacity 180ms ease;
++}
++
++.card-vignette {
++  transition: opacity 180ms ease;
++}
++
++.app-shell.is-ui-hidden .topbar,
++.app-shell.is-ui-hidden .art-meta,
++.app-shell.is-ui-hidden .action-rail,
++.app-shell.is-ui-hidden .card-vignette {
++  opacity: 0;
++  pointer-events: none;
+ }
+ 
+ .rail-button {
+@@ -364,8 +381,8 @@ a {
+   height: 22px;
+   display: block;
+   background: #fff;
+-  mask: url("./assets/icons/awfilled.svg") center / contain no-repeat;
+-  -webkit-mask: url("./assets/icons/awfilled.svg") center / contain no-repeat;
++  mask: url("./assets/icons/awiconfilled.png") center / contain no-repeat;
++  -webkit-mask: url("./assets/icons/awiconfilled.png") center / contain no-repeat;
+   filter: none;
+ }
+ 
+@@ -420,6 +437,43 @@ a {
+   margin-bottom: 16px;
+ }
+ 
++.board-actions {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++}
++
++.download-board-button {
++  min-width: 0;
++  height: 38px;
++  border: 0;
++  border-radius: 999px;
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  padding: 0 12px;
++  color: #080806;
++  background: rgba(255, 255, 255, 0.92);
++  font: inherit;
++  font-size: 12px;
++  font-weight: 750;
++  cursor: pointer;
++}
++
++.download-board-button:disabled {
++  cursor: default;
++  opacity: 0.38;
++}
++
++.download-board-button.is-working span:last-child {
++  font-size: 0;
++}
++
++.download-board-button.is-working span:last-child::after {
++  content: "Preparing";
++  font-size: 12px;
++}
++
+ .board-header p,
+ .board-header h1 {
+   margin: 0;
