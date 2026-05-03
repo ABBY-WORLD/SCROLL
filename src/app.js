@@ -1,4 +1,5 @@
 const feedDeck = document.querySelector("#feedDeck");
+const appShell = document.querySelector(".app-shell");
 const classicFeed = document.querySelector("#classicFeed");
 const arenaFeed = document.querySelector("#arenaFeed");
 const template = document.querySelector("#artworkTemplate");
@@ -10,6 +11,7 @@ const sourceStatus = document.querySelector("#sourceStatus");
 const eraOptions = document.querySelectorAll(".era-option");
 const refreshButton = document.querySelector("#refreshButton");
 const openBoardButton = document.querySelector("#openBoardButton");
+const downloadBoardButton = document.querySelector("#downloadBoardButton");
 const musicButton = document.querySelector("#musicButton");
 const radioRandomButton = document.querySelector("#radioRandomButton");
 const ambientAudio = document.querySelector("#ambientAudio");
@@ -95,6 +97,7 @@ let activeStationIndex = randomInt(0, RADIO_STATIONS.length - 1);
 let activeStreamIndex = 0;
 let activeFeedName = "classic";
 let pointerStart = null;
+let uiHideTimer = null;
 
 const sourceState = {
   artic: { page: randomInt(1, 80), label: "Art Institute of Chicago" },
@@ -187,6 +190,7 @@ function init() {
   renderLoader(feedState.arena.element);
   loadMoreClassicArt();
   prepareArenaFeed();
+  resetUiAutoHideTimer();
 }
 
 function bindEvents() {
@@ -203,6 +207,7 @@ function bindEvents() {
   });
 
   openBoardButton.addEventListener("click", openBoard);
+  downloadBoardButton?.addEventListener("click", downloadBoard);
   musicButton.addEventListener("click", toggleMusic);
   radioRandomButton.addEventListener("click", switchRadioStation);
   ambientAudio.addEventListener("error", useNextMusicStream);
@@ -212,6 +217,8 @@ function bindEvents() {
   });
 
   feedDeck.addEventListener("scroll", updateActiveFeedFromScroll);
+  classicFeed.addEventListener("scroll", hideInterfaceForScroll, { passive: true });
+  arenaFeed.addEventListener("scroll", hideInterfaceForScroll, { passive: true });
   feedDeck.addEventListener("pointerdown", handlePointerStart);
   feedDeck.addEventListener("pointerup", handlePointerEnd);
   feedDeck.addEventListener("pointercancel", () => {
@@ -292,9 +299,13 @@ function handlePointerEnd(event) {
   pointerStart = null;
 
   if (Math.abs(deltaX) < 54 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) {
+    if (Math.hypot(deltaX, deltaY) < 16) {
+      toggleInterface();
+    }
     return;
   }
 
+  hideInterfaceForScroll();
   setActiveFeed(deltaX < 0 ? "arena" : "classic");
 }
 
@@ -409,21 +420,22 @@ async function loadMoreClassicArt() {
 
 async function prepareArenaFeed(forceRefresh = false) {
   const state = feedState.arena;
-  setStatus(activeFeedName === "arena" ? "Loading Are.na..." : undefined);
+  setStatus(activeFeedName === "arena" ? "Loading" : undefined);
 
   const cached = readArenaCache();
-  if (!forceRefresh && cached?.items?.length) {
-    state.allItems = randomizeArenaItems(cached.items);
+  const cachedItems = getUsableArenaItems(cached?.items || []);
+  if (!forceRefresh && cachedItems.length) {
+    state.allItems = randomizeArenaItems(cachedItems);
     renderNextArenaBatch();
     setStatus(`${state.items.length} Are.na images`);
-    if (cached.items.length >= ARENA_MIN_CACHE_ITEMS) {
+    if (cachedItems.length >= ARENA_MIN_CACHE_ITEMS) {
       return;
     }
   }
 
   if (!state.items.length) {
-    state.allItems = arenaFallbackItems;
-    renderNextArenaBatch();
+    renderLoader(state.element);
+    setStatus("Loading");
   }
 
   try {
@@ -450,23 +462,30 @@ async function prepareArenaFeed(forceRefresh = false) {
     const normalized = weaveChannels(topChannels.flatMap((channel) => channel.items));
     const nextItems = normalized.length
       ? randomizeArenaItems(normalized)
-      : randomizeArenaItems(cached?.items || arenaFallbackItems);
-    writeArenaCache(nextItems, topChannels);
+      : randomizeArenaItems(cachedItems);
+    if (nextItems.length) {
+      writeArenaCache(nextItems, topChannels);
+    }
 
-    if (nextItems.length > arenaFallbackItems.length) {
+    if (nextItems.length) {
       resetFeed("arena");
       state.allItems = nextItems;
       renderNextArenaBatch();
+      setStatus(`${state.items.length} Are.na images`);
+    } else if (!state.items.length) {
+      setStatus("Loading");
     }
-
-    setStatus(`${state.items.length} Are.na images`);
   } catch (error) {
     console.warn("Are.na ingest failed", error);
     if (!state.items.length) {
-      state.allItems = randomizeArenaItems(cached?.items?.length ? cached.items : arenaFallbackItems);
-      renderNextArenaBatch();
+      state.allItems = randomizeArenaItems(cachedItems);
+      if (state.allItems.length) {
+        renderNextArenaBatch();
+        setStatus(`${state.items.length} Are.na images`);
+      } else {
+        setStatus("Loading");
+      }
     }
-    setStatus("Are.na fallback");
   }
 }
 
@@ -572,26 +591,38 @@ function normalizeArenaBlock(block, channel) {
 
 function renderNextArenaBatch() {
   const state = feedState.arena;
-  if (!state.allItems.length) return;
+  if (!state.allItems.length) return false;
+
+  if (state.cursor >= state.allItems.length) {
+    if (state.allItems.length <= ARENA_PAGE_SIZE || state.allItems.some((item) => isArenaFallbackItem(item))) {
+      return false;
+    }
+
+    state.allItems = randomizeArenaItems(state.allItems);
+    state.cursor = 0;
+  }
 
   const next = state.allItems.slice(state.cursor, state.cursor + ARENA_PAGE_SIZE);
   state.cursor += next.length;
 
   if (next.length === 0) {
-    state.cursor = 0;
-    renderNextArenaBatch();
-    return;
+    return false;
   }
 
   renderArtworks("arena", next);
+  return true;
 }
 
 async function loadMoreArenaArt() {
   const state = feedState.arena;
   if (state.isLoading) return;
   state.isLoading = true;
-  renderNextArenaBatch();
-  setStatus(`${state.items.length} Are.na images`);
+  const didRender = renderNextArenaBatch();
+  if (!didRender && !state.items.length) {
+    setStatus("Loading");
+  } else if (didRender) {
+    setStatus(`${state.items.length} Are.na images`);
+  }
   state.isLoading = false;
 }
 
@@ -771,6 +802,9 @@ function renderBoard() {
   const likedItems = Object.values(likes).sort((a, b) => b.savedAt.localeCompare(a.savedAt));
   boardGrid.innerHTML = "";
   emptyBoard.classList.toggle("is-visible", likedItems.length === 0);
+  if (downloadBoardButton) {
+    downloadBoardButton.disabled = likedItems.length === 0;
+  }
 
   const fragment = document.createDocumentFragment();
   likedItems.forEach((item) => {
@@ -792,14 +826,104 @@ function renderBoard() {
   boardGrid.append(fragment);
 }
 
+async function downloadBoard() {
+  const likedItems = Object.values(likes).sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  if (!downloadBoardButton || !likedItems.length || downloadBoardButton.disabled) return;
+
+  downloadBoardButton.disabled = true;
+  downloadBoardButton.classList.add("is-working");
+
+  const manifest = likedItems.map((item, index) => ({
+    index: index + 1,
+    title: item.title || "Untitled",
+    artist: item.artist || item.attribution || "Unknown artist",
+    source: item.source || "",
+    sourceUrl: item.sourceUrl || "",
+    imageUrl: item.imageUrl || "",
+    savedAt: item.savedAt || "",
+  }));
+  const entries = [
+    textZipEntry("manifest.json", JSON.stringify(manifest, null, 2)),
+    textZipEntry(
+      "sources.txt",
+      manifest
+        .map((item) => `${item.index}. ${item.title}\nSource: ${item.sourceUrl}\nImage: ${item.imageUrl}`)
+        .join("\n\n"),
+    ),
+  ];
+
+  for (const item of manifest) {
+    if (!item.imageUrl) continue;
+
+    try {
+      const response = await fetch(item.imageUrl, { mode: "cors" });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+
+      const contentType = response.headers.get("content-type") || "";
+      const data = new Uint8Array(await response.arrayBuffer());
+      const extension = getImageExtension(item.imageUrl, contentType);
+      entries.push({
+        name: `images/${String(item.index).padStart(2, "0")}-${slugify(item.title)}.${extension}`,
+        data,
+      });
+    } catch (error) {
+      entries.push(
+        textZipEntry(
+          `failed/${String(item.index).padStart(2, "0")}-${slugify(item.title)}.txt`,
+          `This image could not be downloaded directly by the browser.\n\nTitle: ${item.title}\nSource: ${item.sourceUrl}\nImage: ${item.imageUrl}\n\n${error.message}`,
+        ),
+      );
+    }
+  }
+
+  const zip = createZip(entries);
+  triggerDownload(zip, `artscroll-board-${new Date().toISOString().slice(0, 10)}.zip`, "application/zip");
+  downloadBoardButton.classList.remove("is-working");
+  downloadBoardButton.disabled = likedItems.length === 0;
+}
+
 function openBoard() {
   boardPanel.classList.add("is-open");
   boardPanel.setAttribute("aria-hidden", "false");
+  clearUiAutoHideTimer();
 }
 
 function closeBoard() {
   boardPanel.classList.remove("is-open");
   boardPanel.setAttribute("aria-hidden", "true");
+  resetUiAutoHideTimer();
+}
+
+function toggleInterface() {
+  if (boardPanel.classList.contains("is-open")) return;
+
+  appShell.classList.toggle("is-ui-hidden");
+  resetUiAutoHideTimer();
+}
+
+function hideInterfaceForScroll() {
+  if (boardPanel.classList.contains("is-open")) return;
+
+  appShell.classList.add("is-ui-hidden");
+  clearUiAutoHideTimer();
+}
+
+function resetUiAutoHideTimer() {
+  clearUiAutoHideTimer();
+  if (boardPanel.classList.contains("is-open") || appShell.classList.contains("is-ui-hidden")) return;
+
+  uiHideTimer = window.setTimeout(() => {
+    if (!boardPanel.classList.contains("is-open")) {
+      appShell.classList.add("is-ui-hidden");
+    }
+  }, 10000);
+}
+
+function clearUiAutoHideTimer() {
+  if (uiHideTimer) {
+    window.clearTimeout(uiHideTimer);
+    uiHideTimer = null;
+  }
 }
 
 function observeEnd(feedName) {
@@ -869,6 +993,8 @@ function updateEraSwitch() {
 }
 
 function renderLoader(feedElement) {
+  if (feedElement.querySelector("[data-loader]")) return;
+
   const loader = document.createElement("div");
   loader.className = "loader-card";
   loader.dataset.loader = "true";
@@ -912,6 +1038,14 @@ function readArenaCache() {
   } catch {
     return null;
   }
+}
+
+function getUsableArenaItems(items) {
+  return dedupe(items).filter((item) => !isArenaFallbackItem(item));
+}
+
+function isArenaFallbackItem(item) {
+  return item?.id?.startsWith("arena-fallback");
 }
 
 function writeArenaCache(items, channels) {
@@ -1026,6 +1160,138 @@ function randomOtherIndex(currentIndex, length) {
   return nextIndex;
 }
 
+function createZip(entries) {
+  const fileParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  entries.forEach((entry) => {
+    const nameBytes = encodeText(entry.name);
+    const data = entry.data instanceof Uint8Array ? entry.data : encodeText(String(entry.data || ""));
+    const crc = crc32(data);
+    const localHeader = concatBytes(
+      uint32(0x04034b50),
+      uint16(20),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint32(crc),
+      uint32(data.length),
+      uint32(data.length),
+      uint16(nameBytes.length),
+      uint16(0),
+      nameBytes,
+    );
+    const centralHeader = concatBytes(
+      uint32(0x02014b50),
+      uint16(20),
+      uint16(20),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint32(crc),
+      uint32(data.length),
+      uint32(data.length),
+      uint16(nameBytes.length),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint32(0),
+      uint32(offset),
+      nameBytes,
+    );
+
+    fileParts.push(localHeader, data);
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  });
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const endRecord = concatBytes(
+    uint32(0x06054b50),
+    uint16(0),
+    uint16(0),
+    uint16(entries.length),
+    uint16(entries.length),
+    uint32(centralSize),
+    uint32(offset),
+    uint16(0),
+  );
+
+  return new Blob([...fileParts, ...centralParts, endRecord], { type: "application/zip" });
+}
+
+function textZipEntry(name, text) {
+  return { name, data: encodeText(text) };
+}
+
+function triggerDownload(blob, filename, type) {
+  const payload = blob instanceof Blob ? blob : new Blob([blob], { type });
+  const url = URL.createObjectURL(payload);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function getImageExtension(url, contentType) {
+  if (contentType.includes("png")) return "png";
+  if (contentType.includes("webp")) return "webp";
+  if (contentType.includes("gif")) return "gif";
+  if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
+
+  const match = new URL(url, window.location.href).pathname.match(/\.([a-z0-9]+)$/i);
+  return match?.[1]?.slice(0, 5).toLowerCase() || "jpg";
+}
+
+function uint16(value) {
+  const bytes = new Uint8Array(2);
+  bytes[0] = value & 0xff;
+  bytes[1] = (value >>> 8) & 0xff;
+  return bytes;
+}
+
+function uint32(value) {
+  const bytes = new Uint8Array(4);
+  bytes[0] = value & 0xff;
+  bytes[1] = (value >>> 8) & 0xff;
+  bytes[2] = (value >>> 16) & 0xff;
+  bytes[3] = (value >>> 24) & 0xff;
+  return bytes;
+}
+
+function concatBytes(...chunks) {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return result;
+}
+
+function encodeText(text) {
+  return new TextEncoder().encode(text);
+}
+
+function crc32(data) {
+  let crc = -1;
+  for (let index = 0; index < data.length; index += 1) {
+    crc ^= data[index];
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ -1) >>> 0;
+}
+
 function delay(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -1039,6 +1305,14 @@ function cleanLine(value) {
 function cleanTitle(value) {
   const title = cleanLine(value) || "Untitled";
   return title.replace(/\.(jpe?g|png|gif|webp)$/i, "");
+}
+
+function slugify(value) {
+  return cleanLine(value || "work")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "work";
 }
 
 function escapeHtml(value) {

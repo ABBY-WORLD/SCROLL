@@ -49,9 +49,15 @@
               <p>Your board</p>
               <h1 id="boardTitle">Saved works</h1>
             </div>
-            <button class="icon-button" type="button" title="Close" aria-label="Close board" data-close-board>
-              <span aria-hidden="true">×</span>
-            </button>
+            <div class="board-actions">
+              <button class="download-board-button" id="downloadBoardButton" type="button" title="Download board" aria-label="Download board">
+                <span aria-hidden="true">↓</span>
+                <span>Download</span>
+              </button>
+              <button class="icon-button" type="button" title="Close" aria-label="Close board" data-close-board>
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
           </header>
           <div class="board-grid" id="boardGrid"></div>
           <p class="empty-board" id="emptyBoard">Tap the icon to save works here.</p>
