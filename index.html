@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#12120f" />
+    <title>ArtScroll</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="feed-deck" id="feedDeck" aria-label="ArtScroll feeds">
+        <section class="feed-panel" aria-label="Public domain art">
+          <div class="feed" id="classicFeed"></div>
+        </section>
+        <section class="feed-panel" aria-label="Are.na feed">
+          <div class="feed arena-feed" id="arenaFeed"></div>
+        </section>
+      </section>
+
+      <nav class="topbar" aria-label="Primary navigation">
+        <button class="icon-button" id="refreshButton" type="button" title="New mix" aria-label="New mix">
+          <span aria-hidden="true">↻</span>
+        </button>
+        <button class="icon-button" id="musicButton" type="button" title="Music" aria-label="Start music" aria-pressed="false">
+          <span aria-hidden="true">♪</span>
+        </button>
+        <button class="icon-button" id="radioRandomButton" type="button" title="Random radio station" aria-label="Random radio station">
+          <span aria-hidden="true">⇄</span>
+        </button>
+        <div class="brand" aria-label="Then Now">
+          <div class="era-switch" id="eraSwitch" aria-hidden="true">
+            <span class="era-option is-active" data-era="classic">Then</span>
+            <span class="era-option" data-era="arena">Now</span>
+          </div>
+          <small id="sourceStatus">Open collections</small>
+        </div>
+        <button class="icon-button board-button" id="openBoardButton" type="button" title="Board" aria-label="Open board">
+          <span aria-hidden="true">▦</span>
+          <strong id="likeCount">0</strong>
+        </button>
+      </nav>
+
+      <aside class="board-panel" id="boardPanel" aria-hidden="true" aria-label="Your board">
+        <div class="board-scrim" data-close-board></div>
+        <section class="board-sheet" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
+          <header class="board-header">
+            <div>
+              <p>Your board</p>
+              <h1 id="boardTitle">Saved works</h1>
+            </div>
+            <button class="icon-button" type="button" title="Close" aria-label="Close board" data-close-board>
+              <span aria-hidden="true">×</span>
+            </button>
+          </header>
+          <div class="board-grid" id="boardGrid"></div>
+          <p class="empty-board" id="emptyBoard">Tap the icon to save works here.</p>
+        </section>
+      </aside>
+
+      <audio id="ambientAudio" preload="none"></audio>
+    </main>
+
+    <template id="artworkTemplate">
+      <article class="artwork-card">
+        <div class="image-stage">
+          <img class="art-image" alt="" loading="lazy" />
+        </div>
+        <div class="card-vignette"></div>
+        <section class="art-meta">
+          <div class="source-row">
+            <span class="source-pill"></span>
+            <span class="license-pill">Public domain / CC0</span>
+          </div>
+          <h2></h2>
+          <p class="artist"></p>
+          <p class="details"></p>
+        </section>
+        <menu class="action-rail">
+          <button class="rail-button like-button" type="button" title="Save" aria-label="Save">
+            <span class="av-icon" aria-hidden="true"></span>
+          </button>
+          <a class="rail-button source-link" title="Open source" aria-label="Open source" target="_blank" rel="noreferrer">
+            <span aria-hidden="true">↗</span>
+          </a>
+        </menu>
+      </article>
+    </template>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
