@@ -7,6 +7,8 @@ Mobile-first art scrolling app with two feeds:
 
 It also includes saved boards, source links, and SomaFM ambient radio controls.
 
+Live site: https://abby-world.github.io/SCROLL/
+
 Run locally with any static server, for example:
 
 ```bash
